@@ -51,7 +51,7 @@ export default function AmendmentsPage() {
     setSaving(true)
     try {
       await amendmentsAPI.create({
-        remitID: parseInt(form.remitID),
+        remitId: parseInt(form.remitID),
         fieldChanged: form.fieldChanged,
         oldValue: form.oldValue,
         newValue: form.newValue,

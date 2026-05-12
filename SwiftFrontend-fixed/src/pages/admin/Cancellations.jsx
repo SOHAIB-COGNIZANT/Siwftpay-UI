@@ -56,7 +56,7 @@ export default function CancellationsPage() {
     setSaving(true)
     try {
       await cancellationsAPI.create({
-        remitID: parseInt(form.remitID),
+        remitId: parseInt(form.remitID),
         reason: form.reason,
       })
       toast.success('Cancellation requested')
@@ -71,10 +71,11 @@ export default function CancellationsPage() {
   }
 
   const handleStatus = async (id, status) => {
-    if (!confirm(`Move to ${status}?`)) return
+    if (!confirm(`Move cancellation to ${status}?`)) return
     try {
       await cancellationsAPI.updateStatus(id, { status })
       toast.success(`Moved to ${status}`)
+      // Reload so the table and stat cards reflect the updated cancellation + remittance status
       load()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed')

@@ -104,7 +104,7 @@ export default function Notifications() {
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-xs text-gray-400">{n.category}</span>
                       <span className="text-xs text-gray-400">•</span>
-                      <span className="text-xs text-gray-400">{formatIST(n.createdDate)}</span>
+                      <span className="text-xs text-gray-400">{formatIST(n.createdAt)}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
