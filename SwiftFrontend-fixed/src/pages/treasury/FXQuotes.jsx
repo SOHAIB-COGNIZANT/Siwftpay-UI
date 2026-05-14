@@ -65,11 +65,20 @@ export default function FXQuotesPage() {
 
   const handleLookup = async (e) => {
     e.preventDefault()
-    if (!lookupId.trim()) return
+    // Strip leading '#' — pasting from the display or the history table adds it
+    const id = lookupId.trim().replace(/^#/, '')
+    if (!id) return
     setLooking(true)
     try {
-      const res = await fxQuotesAPI.getById(lookupId.trim())
-      setLookupResult(res.data ?? res)
+      const res = await fxQuotesAPI.getById(id)
+      const result = res.data ?? res
+      // If the # caused the URL to collapse to /api/fxquotes/ we'd get an array back — reject it
+      if (Array.isArray(result)) {
+        toast.error('Quote not found')
+        setLookupResult(null)
+        return
+      }
+      setLookupResult(result)
     } catch (err) {
       setLookupResult(null)
       toast.error(err.response?.data?.message || 'Quote not found')
@@ -172,9 +181,10 @@ export default function FXQuotesPage() {
             <form onSubmit={handleLookup} className="space-y-4">
               <div>
                 <label className="form-label">Quote ID</label>
-                <input value={lookupId} onChange={(e) => setLookupId(e.target.value)}
+                <input value={lookupId}
+                  onChange={(e) => setLookupId(e.target.value.replace(/^#/, ''))}
                   className="form-input font-mono text-xs"
-                  placeholder="00000000-0000-0000-0000-000000000000" />
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
               </div>
               <button type="submit" disabled={looking}
                 className="btn-primary w-full flex items-center justify-center gap-2">
