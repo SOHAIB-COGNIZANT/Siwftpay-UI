@@ -3,6 +3,7 @@ import { formatIST, formatISTDate, formatISTTime } from '../../utils/date'
 import { remittancesAPI } from '../../api/remittances'
 import { customersAPI } from '../../api/customers'
 import { beneficiariesAPI } from '../../api/beneficiaries'
+import { documentsAPI } from '../../api/documents'
 import Layout from '../../components/layout/Layout'
 import Card from '../../components/common/Card'
 import Table from '../../components/common/Table'
@@ -11,7 +12,7 @@ import StatusBadge from '../../components/common/StatusBadge'
 import Loader from '../../components/common/Loader'
 import toast from 'react-hot-toast'
 import {
-  CheckCircle, XCircle, RefreshCw, Filter, Eye, ShieldAlert, Clock, Users,
+  CheckCircle, XCircle, RefreshCw, Filter, Eye, ShieldAlert, Clock, Users, FileText,
 } from 'lucide-react'
 
 // Pre-payout statuses an agent should review. Paid / Cancelled / Refunded are terminal.
@@ -35,6 +36,11 @@ export default function AgentApprovals() {
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [acting, setActing] = useState(false)
+
+  // Supporting documents for the open remittance
+  const [remitDocs, setRemitDocs] = useState([])
+  const [remitDocsLoading, setRemitDocsLoading] = useState(false)
+  const [viewingDocId, setViewingDocId] = useState(null)
 
   const normalizeRemit = (r) => ({
     ...r,
@@ -92,8 +98,45 @@ export default function AgentApprovals() {
     refunded:  remits.filter((r) => r.status === 'Refunded').length,
   }), [remits])
 
-  const openReview = (r) => { setSelected(r); setReviewOpen(true) }
+  const openReview = async (r) => {
+    setSelected(r)
+    setRemitDocs([])
+    setReviewOpen(true)
+    if (!r.remitId) return
+    setRemitDocsLoading(true)
+    try {
+      const res = await documentsAPI.getByRemittance(r.remitId)
+      const list = res.data ?? res
+      setRemitDocs(Array.isArray(list) ? list.map((d) => ({ ...d, fileURI: d.fileURI ?? d.fileUri })) : [])
+    } catch {
+      setRemitDocs([])
+    } finally {
+      setRemitDocsLoading(false)
+    }
+  }
   const openReject = () => { setRejectReason(''); setRejectOpen(true) }
+
+  const openRemittanceDocument = (doc) => {
+    const uri = doc.fileURI
+    if (!uri) { toast.error('No file attached to this document'); return }
+    if (uri.startsWith('data:')) {
+      const tab = window.open('about:blank', '_blank')
+      if (!tab) { toast.error('Allow popups to view documents'); return }
+      const [header, b64] = uri.split(',')
+      const mimeMatch = header.match(/data:([^;]+)/)
+      const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream'
+      const binary = atob(b64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const blob = new Blob([bytes], { type: mime })
+      const url = URL.createObjectURL(blob)
+      tab.location.href = url
+      setTimeout(() => URL.revokeObjectURL(url), 30000)
+    } else {
+      window.open(uri, '_blank', 'noreferrer')
+    }
+    setViewingDocId(null)
+  }
 
   const handleApprove = async () => {
     if (!selected?.remitId) return
@@ -274,6 +317,41 @@ export default function AgentApprovals() {
                   </>
                 ) : <p className="text-xs text-gray-400">Loading…</p>}
               </div>
+            </div>
+
+            {/* Supporting documents */}
+            <div>
+              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+                Supporting Documents ({remitDocs.length})
+              </p>
+              {remitDocsLoading ? <Loader size="sm" /> : remitDocs.length === 0 ? (
+                <div className="text-center py-5 bg-gray-50 rounded-xl">
+                  <FileText size={24} className="text-gray-300 mx-auto mb-1" />
+                  <p className="text-xs text-gray-400">No supporting documents uploaded</p>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {remitDocs.map((d) => (
+                    <li key={d.documentId ?? d.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-100">
+                      <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center flex-shrink-0">
+                        <FileText size={14} className="text-primary-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 text-xs">{d.documentType || d.docType || 'Document'}</p>
+                        <p className="text-xs text-gray-400 truncate">{(d.fileURI || '').startsWith('data:') ? 'Uploaded file' : d.fileURI || '—'}</p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={viewingDocId === (d.documentId ?? d.id)}
+                        onClick={() => { setViewingDocId(d.documentId ?? d.id); openRemittanceDocument(d) }}
+                        className="p-1.5 hover:bg-blue-50 rounded text-blue-600 disabled:opacity-40"
+                        title="View document">
+                        <Eye size={13} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Compliance gate banner — shown when status is not Validated */}

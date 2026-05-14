@@ -10,7 +10,7 @@ import StatusBadge from '../../components/common/StatusBadge'
 import Loader from '../../components/common/Loader'
 import toast from 'react-hot-toast'
 import { KYC_DOC_LABELS, KYC_REQUIRED_DOCS } from '../../utils/kyc'
-import { CheckCircle, XCircle, Search, FileText, ExternalLink, Check, X as XIcon, Eye } from 'lucide-react'
+import { CheckCircle, XCircle, Search, FileText, Check, X as XIcon, Eye } from 'lucide-react'
 
 const STATUS_TABS = ['All', 'Pending', 'Verified', 'Rejected']
 
@@ -223,7 +223,6 @@ export default function KYCReview() {
                 <ul className="space-y-2">
                   {docs.map((d) => {
                     const isBase64 = (d.fileURI || '').startsWith('data:')
-                    const isUrl = !isBase64 && ((d.fileURI || '').includes('://') || (d.fileURI || '').startsWith('/'))
                     const ext = isBase64
                       ? (d.fileURI.startsWith('data:image') ? 'jpg' : 'pdf')
                       : null
@@ -241,17 +240,13 @@ export default function KYCReview() {
                         </div>
                         <StatusBadge status={d.verificationStatus || 'Pending'} />
                         <div className="flex gap-1">
-                          {isBase64 ? (
-                            <a href={d.fileURI} download={`${d.docType}.${ext}`}
-                              className="p-1.5 hover:bg-blue-50 rounded text-blue-600" title="Download">
-                              <ExternalLink size={13} />
-                            </a>
-                          ) : isUrl ? (
-                            <a href={d.fileURI} target="_blank" rel="noreferrer"
-                              className="p-1.5 hover:bg-blue-50 rounded text-blue-600" title="Open URL">
-                              <ExternalLink size={13} />
-                            </a>
-                          ) : null}
+                          <button type="button"
+                            disabled={viewingDocId === d.kycDocumentId}
+                            onClick={() => handleViewDoc(d.kycDocumentId)}
+                            className="p-1.5 hover:bg-blue-50 rounded text-blue-600 disabled:opacity-40"
+                            title="View document">
+                            <Eye size={13} />
+                          </button>
                           <button type="button" onClick={() => handleVerifyDoc(d.kycDocumentId, 'Verified')}
                             className="p-1.5 hover:bg-green-50 rounded text-green-600" title="Approve">
                             <Check size={13} />
