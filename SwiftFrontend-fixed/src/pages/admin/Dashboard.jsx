@@ -95,12 +95,12 @@ export default function AdminDashboard() {
             {corridorData.length === 0 ? (
               <p className="text-gray-400 text-sm text-center py-8">No remittance data</p>
             ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={corridorData}>
-                  <XAxis dataKey="corridor" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip />
-                  <Bar dataKey="volume" fill="#0B4FCC" radius={[4, 4, 0, 0]} />
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={corridorData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <XAxis dataKey="corridor" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} interval={0} />
+                  <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={55} />
+                  <Tooltip formatter={(v) => [`$${v.toLocaleString()}`, 'Volume']} />
+                  <Bar dataKey="volume" fill="#0B4FCC" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -110,13 +110,13 @@ export default function AdminDashboard() {
             {statusDist.length === 0 ? (
               <p className="text-gray-400 text-sm text-center py-8">No data</p>
             ) : (
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
-                  <Pie data={statusDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} label>
+                  <Pie data={statusDist} dataKey="value" nameKey="name" cx="50%" cy="42%" outerRadius={72} labelLine={false}>
                     {statusDist.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                   </Pie>
                   <Tooltip />
-                  <Legend iconSize={10} iconType="circle" />
+                  <Legend iconSize={10} iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
                 </PieChart>
               </ResponsiveContainer>
             )}
