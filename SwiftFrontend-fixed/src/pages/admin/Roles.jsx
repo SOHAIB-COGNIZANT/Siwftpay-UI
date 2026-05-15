@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react'
 import { formatIST, formatISTDate, formatISTTime } from '../../utils/date'
+import { useAuth } from '../../context/AuthContext'
 import { rolesAPI } from '../../api/roles'
 import { usersAPI } from '../../api/users'
 import Layout from '../../components/layout/Layout'
@@ -21,6 +22,7 @@ const ROLE_COLORS = {
 }
 
 export default function AdminRoles() {
+  const { user: currentUser } = useAuth()
   const [roles, setRoles] = useState([])
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -63,8 +65,10 @@ export default function AdminRoles() {
     }
   }
 
-  const handleRemove = async (userId, userRoleId) => {
-    if (!confirm('Remove this role assignment?')) return
+  const handleRemove = async (userId, userRoleId, roleType) => {
+    if (roleType === 'Admin') { toast.error('Cannot remove the Admin role'); return }
+    if (userId === currentUser?.userId) { toast.error('Cannot remove your own role'); return }
+    if (!confirm(`Remove ${roleType} role from this user?`)) return
     try {
       await rolesAPI.removeRole(userId, userRoleId)
       toast.success('Role removed')
@@ -74,9 +78,11 @@ export default function AdminRoles() {
     }
   }
 
-  // Build user→roles index
+  // Build user→roles index — u.roles is [{userRoleId, roleId, roleType, ...}] not string[]
   const usersByRole = ROLE_TYPES.reduce((acc, rt) => {
-    acc[rt] = users.filter((u) => u.role === rt || u.roles?.includes(rt))
+    acc[rt] = users.filter((u) =>
+      (u.roles ?? []).some((r) => (r.roleType ?? r.RoleType) === rt)
+    )
     return acc
   }, {})
 
@@ -130,14 +136,26 @@ export default function AdminRoles() {
                     <span className="text-xs text-gray-400">{list.length} users</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {list.map((u) => (
-                      <div key={u.userId} className="flex items-center justify-between p-2 rounded-lg border border-gray-100 text-sm">
-                        <div>
-                          <p className="font-medium text-gray-900">{u.name}</p>
-                          <p className="text-xs text-gray-500">{u.email}</p>
+                    {list.map((u) => {
+                      const assignment = (u.roles ?? []).find((r) => (r.roleType ?? r.RoleType) === rt)
+                      const userRoleId = assignment?.userRoleId ?? assignment?.UserRoleId
+                      const isSelf = u.userId === currentUser?.userId
+                      const canRemove = rt !== 'Admin' && !isSelf && userRoleId
+                      return (
+                        <div key={u.userId} className="flex items-center justify-between p-2 rounded-lg border border-gray-100 text-sm">
+                          <div>
+                            <p className="font-medium text-gray-900">{u.name}</p>
+                            <p className="text-xs text-gray-500">{u.email}</p>
+                          </div>
+                          {canRemove && (
+                            <button onClick={() => handleRemove(u.userId, userRoleId, rt)}
+                              className="p-1 hover:bg-red-50 rounded text-red-400 flex-shrink-0" title="Remove role">
+                              <X size={12} />
+                            </button>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )

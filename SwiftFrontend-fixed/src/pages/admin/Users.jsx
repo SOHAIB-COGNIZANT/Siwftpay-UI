@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useAuth } from '../../context/AuthContext'
 import { usersAPI } from '../../api/users'
 import { rolesAPI } from '../../api/roles'
 import Layout from '../../components/layout/Layout'
@@ -13,19 +14,28 @@ import { Plus, Edit2, Trash2, Search, UserPlus, Shield } from 'lucide-react'
 const ROLES = ['Admin', 'Customer', 'Agent', 'Compliance', 'Ops', 'Treasury']
 
 export default function AdminUsers() {
+  const { user: currentUser } = useAuth()
   const [users, setUsers] = useState([])
+  const [availableRoles, setAvailableRoles] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [staffModalOpen, setStaffModalOpen] = useState(false)
   const [editUser, setEditUser] = useState(null)
   const [form, setForm] = useState({ name: '', email: '', phone: '', status: 'Active' })
-  const [staffForm, setStaffForm] = useState({ name: '', email: '', phone: '', password: '', role: 'Compliance' })
+  const [staffForm, setStaffForm] = useState({ name: '', email: '', phone: '', password: '', roleId: '' })
   const [saving, setSaving] = useState(false)
 
   const load = () => {
-    usersAPI.getAll()
-      .then((r) => setUsers(Array.isArray(r.data) ? r.data : []))
+    setLoading(true)
+    Promise.all([usersAPI.getAll(), rolesAPI.getAll()])
+      .then(([u, r]) => {
+        setUsers(Array.isArray(u.data) ? u.data : [])
+        const rolesPayload = r.data?.roles ?? r.data ?? []
+        const staffRoles = Array.isArray(rolesPayload) ? rolesPayload.filter((x) => (x.roleType ?? x.RoleType) !== 'Customer') : []
+        setAvailableRoles(staffRoles)
+        if (staffRoles.length > 0) setStaffForm((f) => f.roleId ? f : { ...f, roleId: String(staffRoles[0].roleId) })
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }
@@ -48,10 +58,14 @@ export default function AdminUsers() {
     }
   }
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (targetUser) => {
+    const roles = targetUser.roles ?? []
+    const isAdmin = roles.some((r) => (r.roleType ?? r.RoleType) === 'Admin')
+    if (isAdmin) { toast.error('Cannot deactivate an Admin user'); return }
+    if (targetUser.userId === currentUser?.userId) { toast.error('Cannot deactivate your own account'); return }
     if (!confirm('Deactivate this user?')) return
     try {
-      await usersAPI.delete(id)
+      await usersAPI.delete(targetUser.userId)
       toast.success('User deactivated')
       load()
     } catch { toast.error('Failed') }
@@ -59,12 +73,19 @@ export default function AdminUsers() {
 
   const handleCreateStaff = async (e) => {
     e.preventDefault()
+    if (!staffForm.roleId) { toast.error('Select a role'); return }
     setSaving(true)
     try {
-      await rolesAPI.createStaff(staffForm)
+      await rolesAPI.createStaff({
+        name:     staffForm.name,
+        email:    staffForm.email,
+        phone:    staffForm.phone,
+        password: staffForm.password,
+        roleId:   parseInt(staffForm.roleId),
+      })
       toast.success('Staff user created')
       setStaffModalOpen(false)
-      setStaffForm({ name: '', email: '', phone: '', password: '', role: 'Compliance' })
+      setStaffForm({ name: '', email: '', phone: '', password: '', roleId: availableRoles[0] ? String(availableRoles[0].roleId) : '' })
       load()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed')
@@ -82,20 +103,32 @@ export default function AdminUsers() {
     { key: 'name',   label: 'Name' },
     { key: 'email',  label: 'Email',  render: (v) => <span className="text-xs text-gray-600">{v}</span> },
     { key: 'phone',  label: 'Phone',  render: (v) => <span className="text-xs">{v || '—'}</span> },
-    // Backend returns roles:[{roleType}] array, not a single 'role' field
-    { key: 'roles',  label: 'Role',   render: (v, row) => {
-        const roleStr = row.role ?? (Array.isArray(v) && v.length > 0 ? (v[0].roleType ?? v[0].RoleType ?? v[0]) : null)
-        return roleStr ? <span className="px-2 py-0.5 bg-primary-50 text-primary-700 text-xs rounded-full">{roleStr}</span> : '—'
+    { key: 'roles',  label: 'Role',   render: (v) => {
+        const arr = Array.isArray(v) ? v : []
+        if (arr.length === 0) return <span className="text-gray-400 text-xs">—</span>
+        const toShow = arr.filter((r) => (r.roleType ?? r.RoleType) !== 'Customer')
+        const display = (toShow.length > 0 ? toShow : arr).map((r) => r.roleType ?? r.RoleType).filter(Boolean)
+        return (
+          <div className="flex flex-wrap gap-1">
+            {display.map((rt, i) => <span key={i} className="px-2 py-0.5 bg-primary-50 text-primary-700 text-xs rounded-full">{rt}</span>)}
+          </div>
+        )
       }
     },
     { key: 'status', label: 'Status', render: (v) => <StatusBadge status={v || 'Active'} /> },
     { key: 'userId', label: 'Actions',
-      render: (_, row) => (
-        <div className="flex gap-2">
-          <button onClick={() => openEdit(row)} className="p-1.5 hover:bg-blue-50 rounded text-blue-600"><Edit2 size={13} /></button>
-          <button onClick={() => handleDelete(row.userId)} className="p-1.5 hover:bg-red-50 rounded text-red-500"><Trash2 size={13} /></button>
-        </div>
-      )
+      render: (_, row) => {
+        const isAdmin = (row.roles ?? []).some((r) => (r.roleType ?? r.RoleType) === 'Admin')
+        return (
+          <div className="flex gap-2">
+            <button onClick={() => openEdit(row)} className="p-1.5 hover:bg-blue-50 rounded text-blue-600"><Edit2 size={13} /></button>
+            <button onClick={() => handleDelete(row)} disabled={isAdmin} title={isAdmin ? 'Cannot deactivate Admin' : 'Deactivate'}
+              className="p-1.5 hover:bg-red-50 rounded text-red-500 disabled:opacity-30 disabled:cursor-not-allowed">
+              <Trash2 size={13} />
+            </button>
+          </div>
+        )
+      }
     },
   ]
 
@@ -172,8 +205,9 @@ export default function AdminUsers() {
             </div>
             <div>
               <label className="form-label">Role *</label>
-              <select value={staffForm.role} onChange={(e) => setStaffForm((f) => ({ ...f, role: e.target.value }))} className="form-select">
-                {['Agent', 'Compliance', 'Ops', 'Treasury', 'Admin'].map((r) => <option key={r}>{r}</option>)}
+              <select required value={staffForm.roleId} onChange={(e) => setStaffForm((f) => ({ ...f, roleId: e.target.value }))} className="form-select">
+                <option value="">Select role...</option>
+                {availableRoles.map((r) => <option key={r.roleId} value={r.roleId}>{r.roleType}</option>)}
               </select>
             </div>
             <div className="col-span-2">
